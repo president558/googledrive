@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Googleドライブ 整理・自動仕分けマスター</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Noto Sans JP', sans-serif; background-color: #f8fafc; color: #1e293b; -webkit-tap-highlight-color: transparent; }
+  .tab-active { background-color: #1a73e8; color: #ffffff; font-weight: 700; box-shadow: 0 2px 6px rgba(26,115,232,0.3); }
+  .tab-inactive { background-color: #ffffff; color: #475569; border: 1px solid #e2e8f0; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  @keyframes popIn { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  .animate-pop { animation: popIn 0.2s ease-out forwards; }
+</style>
+</head>
+<body class="pb-20">
+
+<!-- ヘッダー -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+  <div class="max-w-4xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 via-emerald-500 to-amber-500 flex items-center justify-center text-white font-black text-lg shadow-sm">
+        📁
+      </div>
+      <div>
+        <h1 class="text-base sm:text-lg font-black tracking-tight text-slate-800 leading-tight">Googleドライブ 整理マスター</h1>
+        <p class="text-[11px] text-slate-500 font-medium">散らからない仕組み化 ＆ GAS自動仕分けツール</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="health-badge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+        整理度: <span id="health-score">0</span>%
+      </span>
+    </div>
+  </div>
+
+  <!-- ナビゲーションタブ -->
+  <div class="max-w-4xl mx-auto px-4 pb-2.5 flex gap-1.5 overflow-x-auto no-scrollbar">
+    <button onclick="switchTab('tab-diag')" id="btn-tab-diag" class="tab-active px-3.5 py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap transition">🩺 1. 散らかり診断</button>
+    <button onclick="switchTab('tab-folder')" id="btn-tab-folder" class="tab-inactive px-3.5 py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap transition">📂 2. 黄金フォルダ設計</button>
+    <button onclick="switchTab('tab-naming')" id="btn-tab-naming" class="tab-inactive px-3.5 py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap transition">🏷️ 3. 命名＆検索ルール</button>
+    <button onclick="switchTab('tab-gas')" id="btn-tab-gas" class="tab-inactive px-3.5 py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap transition">⚡ 4. GAS自動整理ロボット</button>
+    <button onclick="switchTab('tab-routine')" id="btn-tab-routine" class="tab-inactive px-3.5 py-2 rounded-lg text-xs sm:text-sm whitespace-nowrap transition">✅ 5. 週1クリーン習慣</button>
+  </div>
+</header>
+
+<main class="max-w-4xl mx-auto px-4 pt-5 space-y-6">
+
+  <!-- ==================== TAB 1: 散らかり診断＆リセット ==================== -->
+  <section id="tab-diag" class="space-y-5 animate-pop">
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <span class="text-[11px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded">STEP 1</span>
+          <h2 class="text-lg font-black text-slate-800 mt-1">現在のドライブ「散らかり度」チェック</h2>
+          <p class="text-xs text-slate-500 mt-0.5">当てはまる項目にチェックを入れると、今すぐやるべき処方箋が表示されます。</p>
+        </div>
+      </div>
+
+      <div id="diag-list" class="space-y-2.5 mt-4">
+        <!-- JSで描画 -->
+      </div>
+
+      <div class="mt-5 p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold text-slate-500">あなたのドライブ診断結果</p>
+          <p id="diag-result-title" class="text-base font-black text-slate-800 mt-0.5">項目をチェックして診断してください</p>
+          <p id="diag-result-desc" class="text-xs text-slate-600 mt-1">散らかりの原因の9割は「とりあえずマイドライブ直下に置く癖」と「無題ファイル」です。</p>
+        </div>
+        <button onclick="switchTab('tab-folder')" class="w-full sm:w-auto px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition whitespace-nowrap">
+          黄金フォルダを作る →
+        </button>
+      </div>
+    </div>
+
+    <!-- 散らからない3原則 -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="text-xl mb-1.5">📥</div>
+        <h3 class="text-sm font-black text-slate-800">原則1：一時置き場を作る</h3>
+        <p class="text-xs text-slate-600 mt-1 leading-relaxed">迷ったらすべて「00_INBOX（未整理）」へ放り込む。マイドライブ直下にバラ置きしない。</p>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="text-xl mb-1.5">🔢</div>
+        <h3 class="text-sm font-black text-slate-800">原則2：数字2桁で固定順</h3>
+        <p class="text-xs text-slate-600 mt-1 leading-relaxed">フォルダ頭に「00〜99」を付け、よく使う順に上から固定。階層は最大3階層まで。</p>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="text-xl mb-1.5">🔍</div>
+        <h3 class="text-sm font-black text-slate-800">原則3：探す時は検索窓</h3>
+        <p class="text-xs text-slate-600 mt-1 leading-relaxed">フォルダを辿らず検索窓で一発ヒットさせるため、「日付_種別_内容」で命名する。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 2: 黄金フォルダ設計 ==================== -->
+  <section id="tab-folder" class="hidden space-y-5 animate-pop">
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div>
+          <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">STEP 2</span>
+          <h2 class="text-lg font-black text-slate-800 mt-1">散らからない「5大ベースフォルダ」構成</h2>
+          <p class="text-xs text-slate-500 mt-0.5">用途に合わせてテンプレートを選び、構成をカスタマイズできます。</p>
+        </div>
+        <div class="flex gap-1.5">
+          <button onclick="setFolderPreset('business')" id="preset-biz" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white">個人事業・実務用</button>
+          <button onclick="setFolderPreset('personal')" id="preset-per" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200">プライベート・汎用</button>
+        </div>
+      </div>
+
+      <!-- フォルダツリー表示＆カスタム追加 -->
+      <div id="folder-tree-container" class="space-y-2.5 mt-4">
+        <!-- JSで描画 -->
+      </div>
+
+      <!-- カスタムフォルダ追加フォーム -->
+      <div class="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
+        <input type="text" id="new-folder-name" placeholder="例: 40_YouTube・SNS発信資産" class="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:border-blue-500">
+        <input type="text" id="new-folder-desc" placeholder="用途メモ（例: 台本・サムネ・素材）" class="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:border-blue-500">
+        <button onclick="addCustomFolder()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition whitespace-nowrap">
+          ＋ フォルダ追加
+        </button>
+      </div>
+    </div>
+
+    <!-- ショートカット活用Tips -->
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+      <div class="text-xl">💡</div>
+      <div>
+        <h3 class="text-xs font-black text-amber-900">「どこに入れるか迷うファイル」を無くす裏ワザ（Shift + Z）</h3>
+        <p class="text-xs text-amber-800 mt-1 leading-relaxed">
+          「経理にも使うし案件資料でもある」というファイルはコピーして2つ作らず、片方のフォルダでファイルを選択し<strong>「Shift + Z」（または右クリック → 整理 → ショートカットを追加）</strong>で両方のフォルダに配置すると、元ファイル1つのまま両方から開けます。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 3: 命名＆検索ルール ==================== -->
+  <section id="tab-naming" class="hidden space-y-5 animate-pop">
+    <!-- ファイル名ジェネレーター -->
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">STEP 3</span>
+      <h2 class="text-lg font-black text-slate-800 mt-1">統一ファイル名ジェネレーター</h2>
+      <p class="text-xs text-slate-500 mt-0.5">「無題のスプレッドシート」を撲滅し、並べるだけで時系列になる名前をワンタップ作成します。</p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-600 mb-1">① 日付・年度</label>
+          <input type="text" id="name-date" value="20261118" class="w-full px-3 py-2 text-xs font-bold border border-slate-300 rounded-xl bg-slate-50" oninput="updateGeneratedName()">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-600 mb-1">② カテゴリ種別</label>
+          <select id="name-cat" class="w-full px-3 py-2 text-xs font-bold border border-slate-300 rounded-xl bg-white" onchange="updateGeneratedName()">
+            <option value="経理_領収書">経理_領収書</option>
+            <option value="経理_請求書">経理_請求書</option>
+            <option value="業務記録_DB">業務記録_DB</option>
+            <option value="在庫管理_DB">在庫管理_DB</option>
+            <option value="議事録">議事録</option>
+            <option value="マニュアル">マニュアル</option>
+            <option value="台本・企画">台本・企画</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-600 mb-1">③ 具体的な内容・取引先</label>
+          <input type="text" id="name-title" placeholder="例: ENEOS給油代 / 軽貨物記録簿" value="軽貨物_業務記録簿" class="w-full px-3 py-2 text-xs font-bold border border-slate-300 rounded-xl" oninput="updateGeneratedName()">
+        </div>
+      </div>
+
+      <div class="mt-4 p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between gap-2">
+        <div class="truncate">
+          <span class="text-[10px] font-bold text-indigo-600 block">生成された推奨ファイル名：</span>
+          <span id="generated-filename" class="text-sm sm:text-base font-black text-slate-900 select-all">20261118_経理_領収書_軽貨物_業務記録簿</span>
+        </div>
+        <button onclick="copyGeneratedName()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition whitespace-nowrap">
+          📋 コピー
+        </button>
+      </div>
+    </div>
+
+    <!-- 最速検索コマンド集 -->
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+      <h3 class="text-base font-black text-slate-800">🔍 一発で目的のファイルを見つける「神検索コマンド」</h3>
+      <p class="text-xs text-slate-500 mt-0.5 mb-3">Googleドライブ上部の検索バーにそのまま貼り付けて使えます。</p>
+      <div class="space-y-2" id="search-commands">
+        <!-- JSで描画 -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 4: GAS自動整理ロボット ==================== -->
+  <section id="tab-gas" class="hidden space-y-5 animate-pop">
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span class="text-[11px] font-bold uppercase tracking-wider text-purple-600 bg-purple-50 px-2 py-0.5 rounded">STEP 4（完全自動化）</span>
+          <h2 class="text-lg font-black text-slate-800 mt-1">マイドライブ直下を「自動仕分け」するGASロボット</h2>
+          <p class="text-xs text-slate-500 mt-0.5">このコードをGoogle Apps Scriptに貼るだけで、あなたのドライブに黄金フォルダを自動生成し、散らかったファイルを種類別に自動移動します。</p>
+        </div>
+      </div>
+
+      <!-- シミュレーター -->
+      <div class="mt-4 p-4 rounded-xl bg-slate-900 text-slate-100">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-emerald-400">🤖 自動仕分け動作プレビュー</span>
+          <button onclick="runGasSimulation()" class="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs rounded-lg transition">
+            ▶ 仕分けテストを実行
+          </button>
+        </div>
+        <div id="sim-console" class="text-xs font-mono space-y-1 text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800 min-h-[110px]">
+          <div>> 待機中：「▶ 仕分けテストを実行」を押すと自動整理の動きを確認できます。</div>
+        </div>
+      </div>
+
+      <!-- GASコード表示＆コピー -->
+      <div class="mt-4">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-black text-slate-700">📜 本番用 Google Apps Script コード（コピペでそのまま動作）</span>
+          <button onclick="copyGasCode()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition">
+            📋 GASコードをコピー
+          </button>
+        </div>
+        <pre id="gas-code-block" class="bg-slate-100 border border-slate-300 rounded-xl p-3 text-[11px] font-mono text-slate-800 overflow-x-auto max-h-64 leading-relaxed"></pre>
+      </div>
+
+      <!-- 導入3ステップ -->
+      <div class="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2 text-xs text-blue-950">
+        <p class="font-black text-blue-800">🚀 わずか2分で導入する手順：</p>
+        <ol class="list-decimal list-inside space-y-1 text-blue-900">
+          <li>PCで <a href="https://script.new" target="_blank" class="underline font-bold text-blue-700">script.new</a> を開く（新しいGAS画面が開きます）。</li>
+          <li>最初から入っている文字をすべて消し、上の<strong>「📋 GASコードをコピー」</strong>した内容を貼り付けて保存（Ctrl+S）。</li>
+          <li>上部の<strong>「実行」</strong>ボタンを押す（初回のみ「権限を確認 → 詳細 → 安全ではないページに移動 → 許可」を押します）。</li>
+          <li><strong>さらに完全自動化したい場合：</strong> 左メニューの「時計マーク（トリガー）」→「トリガーを追加」で、イベントのソースを<strong>「時間主導型（週タイマー / 毎週日曜など）」</strong>に設定すれば、寝ている間にドライブが毎週自動整理されます！</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 5: 週1クリーン習慣 ==================== -->
+  <section id="tab-routine" class="hidden space-y-5 animate-pop">
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <span class="text-[11px] font-bold uppercase tracking-wider text-teal-600 bg-teal-50 px-2 py-0.5 rounded">STEP 5</span>
+          <h2 class="text-lg font-black text-slate-800 mt-1">リバウンドを防ぐ「週1回・3分」メンテチェック</h2>
+          <p class="text-xs text-slate-500 mt-0.5">毎週日曜の夜や金曜の終業前に、この4つだけチェックすれば一生散らかりません。</p>
+        </div>
+        <button onclick="resetWeeklyChecks()" class="text-xs font-bold text-slate-500 hover:text-slate-800 underline">リセット</button>
+      </div>
+
+      <div id="weekly-list" class="space-y-2.5 mt-3">
+        <!-- JSで描画 -->
+      </div>
+    </div>
+
+    <!-- URLブックマーク機能（自分の重要フォルダ・シート登録） -->
+    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+      <h3 class="text-base font-black text-slate-800">⭐ よく使うドライブフォルダ・重要シート クイックランチャー</h3>
+      <p class="text-xs text-slate-500 mt-0.5 mb-3">頻繁に開くGoogleドライブのフォルダURLやスプレッドシートURLを登録しておくと、ここから1タップで開けます。</p>
+
+      <div class="flex flex-col sm:flex-row gap-2 mb-3">
+        <input type="text" id="bm-title" placeholder="表示名（例: 20_経理・確定申告フォルダ）" class="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-xl">
+        <input type="url" id="bm-url" placeholder="https://drive.google.com/..." class="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-xl">
+        <button onclick="addBookmark()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl whitespace-nowrap">＋ 登録</button>
+      </div>
+
+      <div id="bookmark-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <!-- JSで描画 -->
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- トースト通知 -->
+<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 z-50">
+  コピーしました
+</div>
+
+<script>
+// ==================== 状態管理 ====================
+const STORAGE_KEY = 'gdrive_organizer_state_v1';
+
+const defaultDiagItems = [
+  { id: 'd1', text: 'マイドライブの一番上の階層（直下）にファイルが10個以上バラ置きされている', checked: false },
+  { id: 'd2', text: '「無題のスプレッドシート」「無題のドキュメント」がそのまま残っている', checked: false },
+  { id: 'd3', text: '「新しいフォルダ」「名称未設定フォルダ」が存在する', checked: false },
+  { id: 'd4', text: '去年・一昨年の確定申告や終了した案件のフォルダが現役フォルダと混ざっている', checked: false },
+  { id: 'd5', text: 'スクリーンショットやPDFがダウンロード時の英語・数字羅列の名前のままになっている', checked: false }
+];
+
+const presets = {
+  business: [
+    { name: '00_INBOX（一時置き・未整理）', desc: 'スマホから上げた写真・仮作成ファイルはまずここへ', color: 'amber' },
+    { name: '10_アプリDB・自動連携シート', desc: '業務記録簿・在庫管理・AppSheet連携の基幹データ', color: 'blue' },
+    { name: '20_経理・確定申告_2026', desc: '領収書PDF・請求書・売上集計・税務書類（年度別）', color: 'emerald' },
+    { name: '30_業務マニュアル・契約・規程', desc: '業務委託契約書・標準手順書(SOP)・車両保険証控え', color: 'indigo' },
+    { name: '40_発信・コンテンツ資産', desc: 'YouTube台本・note記事原稿・サムネイル画像', color: 'purple' },
+    { name: '99_アーカイブ（完了・過去年度）', desc: '2025年以前の終了データ・使わなくなった旧版ファイル', color: 'slate' }
+  ],
+  personal: [
+    { name: '00_INBOX（一時置き・未整理）', desc: 'とりあえず保存した画像・メモ・PDFの一時保管庫', color: 'amber' },
+    { name: '10_家計・お金・保険・税金', desc: '家計簿シート・医療費控除・保険証券・マイナンバー関連', color: 'emerald' },
+    { name: '20_暮らし・住まい・家電保証書', desc: '取扱説明書PDF・保証書・契約書・引っ越し資料', color: 'blue' },
+    { name: '30_趣味・学習・旅行計画', desc: 'レシピ・勉強メモ・旅行のしおり・チケット控え', color: 'purple' },
+    { name: '99_アーカイブ（過去の思い出・完了）', desc: '過去の年賀状データ・終了したイベント資料', color: 'slate' }
+  ]
+};
+
+const searchCommandsData = [
+  { label: '「無題」のゴミファイルを一掃する', cmd: 'title:無題', desc: '中身が空のテストファイルをまとめて見つけて削除できます' },
+  { label: 'スプレッドシートだけ絞り込む', cmd: 'type:spreadsheet', desc: '各アプリのデータベースシートを一覧表示します' },
+  { label: 'PDF（領収書・契約書）だけ探す', cmd: 'type:pdf', desc: 'スキャンした書類や請求書PDFを一発抽出します' },
+  { label: '直近7日間に編集したファイル', cmd: 'after:2026-11-11', desc: '「昨日作ったあのファイルどこ？」を一瞬で解決（※日付は変更可）' },
+  { label: '誰かと共有中のファイルを確認（情報漏洩チェック）', cmd: 'visibility:anyoneWithLink', desc: 'リンクを知っている全員に公開されているファイルを総点検します' }
+];
+
+const defaultWeeklyItems = [
+  { id: 'w1', text: '「00_INBOX」の中身を「10〜40」の該当フォルダへ振り分けた', done: false },
+  { id: 'w2', text: '検索窓で「title:無題」を検索し、不要なテストファイルをゴミ箱へ入れた', done: false },
+  { id: 'w3', text: '領収書・請求書PDFのファイル名を「日付_経理_内容」にリネームした', done: false },
+  { id: 'w4', text: '終わった案件・古いファイルを「99_アーカイブ」へ移動した', done: false }
+];
+
+const defaultBookmarks = [
+  { title: '📁 Googleドライブ マイドライブを開く', url: 'https://drive.google.com/drive/my-drive' },
+  { title: '📊 Googleスプレッドシート 一覧', url: 'https://docs.google.com/spreadsheets/' }
+];
+
+let state = loadState();
+
+function loadState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (saved) return saved;
+  } catch (e) {}
+  return {
+    diag: defaultDiagItems,
+    folders: JSON.parse(JSON.stringify(presets.business)),
+    weekly: defaultWeeklyItems,
+    bookmarks: defaultBookmarks
+  };
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  updateHealthScore();
+}
+
+// ==================== タブ切り替え ====================
+function switchTab(tabId) {
+  const tabs = ['tab-diag', 'tab-folder', 'tab-naming', 'tab-gas', 'tab-routine'];
+  tabs.forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+    const btn = document.getElementById('btn-' + id);
+    btn.classList.remove('tab-active');
+    btn.classList.add('tab-inactive');
+  });
+  document.getElementById(tabId).classList.remove('hidden');
+  const activeBtn = document.getElementById('btn-' + tabId);
+  activeBtn.classList.remove('tab-inactive');
+  activeBtn.classList.add('tab-active');
+}
+
+// ==================== 1. 散らかり診断 ====================
+function renderDiag() {
+  const list = document.getElementById('diag-list');
+  list.innerHTML = state.diag.map((item, idx) => `
+    <label class="flex items-start gap-3 p-3 rounded-xl border ${item.checked ? 'bg-red-50/60 border-red-200' : 'bg-slate-50 border-slate-200'} cursor-pointer transition">
+      <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleDiag(${idx})" class="mt-0.5 w-4 h-4 accent-red-600 rounded">
+      <span class="text-xs sm:text-sm font-medium ${item.checked ? 'text-red-900 font-bold' : 'text-slate-700'}">${item.text}</span>
+    </label>
+  `).join('');
+  updateDiagSummary();
+}
+
+function toggleDiag(idx) {
+  state.diag[idx].checked = !state.diag[idx].checked;
+  saveState();
+  renderDiag();
+}
+
+function updateDiagSummary() {
+  const count = state.diag.filter(i => i.checked).length;
+  const titleEl = document.getElementById('diag-result-title');
+  const descEl = document.getElementById('diag-result-desc');
+  if (count === 0) {
+    titleEl.textContent = '✨ 素晴らしい！散らかり予備軍ゼロです';
+    titleEl.className = 'text-base font-black text-emerald-700 mt-0.5';
+    descEl.textContent = 'この状態を維持するために、タブ2の黄金フォルダとタブ4のGAS自動整理ロボットを導入しましょう。';
+  } else if (count <= 2) {
+    titleEl.textContent = `⚠️ 要注意レベル（該当 ${count}個）：今のうちに仕組み化を！`;
+    titleEl.className = 'text-base font-black text-amber-700 mt-0.5';
+    descEl.textContent = '放置すると数ヶ月後に「あのファイルどこ？」が発生します。まず「00_INBOX」を作って直下ファイルを入れましょう。';
+  } else {
+    titleEl.textContent = `🚨 危険レベル（該当 ${count}個）：手作業での整理はNG！`;
+    titleEl.className = 'text-base font-black text-red-700 mt-0.5';
+    descEl.textContent = '1つずつ手作業で移動すると挫折します。タブ4の「GAS自動整理ロボット」を使えば3秒で一括仕分けできます！';
+  }
+}
+
+// ==================== 2. 黄金フォルダ設計 ====================
+function renderFolders() {
+  const container = document.getElementById('folder-tree-container');
+  const colorMap = {
+    amber: 'bg-amber-100 text-amber-800 border-amber-200',
+    blue: 'bg-blue-100 text-blue-800 border-blue-200',
+    emerald: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    indigo: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    purple: 'bg-purple-100 text-purple-800 border-purple-200',
+    slate: 'bg-slate-200 text-slate-800 border-slate-300'
+  };
+  container.innerHTML = state.folders.map((f, idx) => `
+    <div class="flex items-center justify-between gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white transition">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="px-2.5 py-1 rounded-lg text-xs font-black border ${colorMap[f.color] || colorMap.blue} shrink-0">📁</span>
+        <div class="min-w-0">
+          <p class="text-xs sm:text-sm font-black text-slate-800 truncate">${f.name}</p>
+          <p class="text-[11px] text-slate-500 truncate">${f.desc}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button onclick="copyText('${f.name}')" class="px-2.5 py-1.5 text-[11px] font-bold bg-white border border-slate-300 hover:bg-slate-100 rounded-lg text-slate-700">コピー</button>
+        <button onclick="removeFolder(${idx})" class="px-2 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50 rounded-lg">削除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function setFolderPreset(type) {
+  state.folders = JSON.parse(JSON.stringify(presets[type]));
+  saveState();
+  renderFolders();
+  showToast(type === 'business' ? '個人事業・実務用フォルダ構成をセットしました' : 'プライベート用フォルダ構成をセットしました');
+}
+
+function addCustomFolder() {
+  const name = document.getElementById('new-folder-name').value.trim();
+  const desc = document.getElementById('new-folder-desc').value.trim() || 'カスタムフォルダ';
+  if (!name) return showToast('フォルダ名を入力してください');
+  state.folders.push({ name, desc, color: 'blue' });
+  state.folders.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  document.getElementById('new-folder-name').value = '';
+  document.getElementById('new-folder-desc').value = '';
+  saveState();
+  renderFolders();
+  showToast('フォルダ構成に追加しました');
+}
+
+function removeFolder(idx) {
+  state.folders.splice(idx, 1);
+  saveState();
+  renderFolders();
+}
+
+// ==================== 3. 命名＆検索ルール ====================
+function updateGeneratedName() {
+  const d = document.getElementById('name-date').value.trim();
+  const c = document.getElementById('name-cat').value;
+  const t = document.getElementById('name-title').value.trim() || '名称未設定';
+  document.getElementById('generated-filename').textContent = `${d}_${c}_${t}`;
+}
+
+function copyGeneratedName() {
+  const text = document.getElementById('generated-filename').textContent;
+  copyText(text);
+}
+
+function renderSearchCommands() {
+  const container = document.getElementById('search-commands');
+  container.innerHTML = searchCommandsData.map(item => `
+    <div class="p-3 rounded-xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div>
+        <p class="text-xs font-black text-slate-800">${item.label}</p>
+        <p class="text-[11px] text-slate-500">${item.desc}</p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <code class="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-blue-700">${item.cmd}</code>
+        <button onclick="copyText('${item.cmd}')" class="px-2.5 py-1 bg-slate-800 text-white text-[11px] font-bold rounded-lg hover:bg-slate-700">コピー</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ==================== 4. GAS自動整理ロボット ====================
+const gasScriptCode = `/**
+ * Googleドライブ 自動フォルダ生成 ＆ 散らかり自動仕分けロボット
+ * 実行するとマイドライブ直下の散らかったファイルを種類別に自動整理します
+ */
+function autoOrganizeGoogleDrive() {
+  const root = DriveApp.getRootFolder();
+  
+  // 1. 黄金フォルダ（存在しなければ自動作成）
+  const folderNames = {
+    inbox: '00_INBOX（一時置き・未整理）',
+    db:    '10_アプリDB・自動連携シート',
+    keiri: '20_経理・確定申告_2026',
+    docs:  '30_業務マニュアル・契約・規程',
+    media: '40_発信・コンテンツ資産'
+  };
+  
+  const folders = {};
+  for (const key in folderNames) {
+    folders[key] = getOrCreateFolder_(root, folderNames[key]);
+  }
+
+  // 2. マイドライブ直下のファイルをスキャンして自動振り分け
+  const files = root.getFiles();
+  let movedCount = 0;
+
+  while (files.hasNext()) {
+    const file = files.next();
+    const name = file.getName();
+    const mime = file.getMimeType();
+
+    // 「無題」かつ作成から24時間以上経過した空ファイルはゴミ箱へ
+    if (name.indexOf('無題') === 0 && file.getSize() === 0) {
+      file.setTrashed(true);
+      continue;
+    }
+
+    // キーワード・ファイル形式による自動仕分けルール
+    if (name.match(/領収書|請求書|レシート|確定申告|経費|インボイス/)) {
+      file.moveTo(folders.keiri);
+      movedCount++;
+    } else if (mime === MimeType.GOOGLE_SHEETS || name.match(/記録簿|在庫|管理|DB|家計簿/)) {
+      file.moveTo(folders.db);
+      movedCount++;
+    } else if (name.match(/議事録|マニュアル|仕様書|契約|SOP/)) {
+      file.moveTo(folders.docs);
+      movedCount++;
+    } else if (name.match(/台本|YouTube|note|サムネ/) || mime.indexOf('image/') === 0 || mime.indexOf('audio/') === 0) {
+      file.moveTo(folders.media);
+      movedCount++;
+    } else {
+      // どれにも当てはまらない直下ファイルはすべて「00_INBOX」へ集約
+      file.moveTo(folders.inbox);
+      movedCount++;
+    }
+  }
+
+  Logger.log('整理完了！移動したファイル数: ' + movedCount + '件');
+}
+
+function getOrCreateFolder_(parent, name) {
+  const iter = parent.getFoldersByName(name);
+  return iter.hasNext() ? iter.next() : parent.createFolder(name);
+}`;
+
+function renderGasCode() {
+  document.getElementById('gas-code-block').textContent = gasScriptCode;
+}
+
+function copyGasCode() {
+  copyText(gasScriptCode);
+}
+
+function runGasSimulation() {
+  const consoleEl = document.getElementById('sim-console');
+  const logs = [
+    '> スキャン開始：マイドライブ直下のファイルを確認中...',
+    '> [作成確認] 00_INBOX / 10_アプリDB / 20_経理 / 30_マニュアル / 40_発信資産 OK',
+    '> [移動] 「無題のスプレッドシート（0KB）」 → ゴミ箱へ移動しました',
+    '> [移動] 「20261115_ENEOS領収書.pdf」 → 20_経理・確定申告_2026 へ移動',
+    '> [移動] 「軽貨物_業務記録簿_2026」 → 10_アプリDB・自動連携シート へ移動',
+    '> [移動] 「会議メモ_下書き.gdoc」 → 00_INBOX（一時置き）へ集約',
+    '> ✅ 完了！マイドライブ直下の散らかりファイルは「0件」になりました。'
+  ];
+  consoleEl.innerHTML = '';
+  logs.forEach((line, i) => {
+    setTimeout(() => {
+      const div = document.createElement('div');
+      div.textContent = line;
+      if (line.includes('✅')) div.className = 'text-emerald-400 font-bold';
+      consoleEl.appendChild(div);
+    }, i * 350);
+  });
+}
+
+// ==================== 5. 週1クリーン習慣 ＆ ブックマーク ====================
+function renderWeekly() {
+  const list = document.getElementById('weekly-list');
+  list.innerHTML = state.weekly.map((item, idx) => `
+    <label class="flex items-center gap-3 p-3 rounded-xl border ${item.done ? 'bg-teal-50 border-teal-200' : 'bg-slate-50 border-slate-200'} cursor-pointer transition">
+      <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleWeekly(${idx})" class="w-4 h-4 accent-teal-600 rounded">
+      <span class="text-xs sm:text-sm font-bold ${item.done ? 'line-through text-teal-800' : 'text-slate-700'}">${item.text}</span>
+    </label>
+  `).join('');
+}
+
+function toggleWeekly(idx) {
+  state.weekly[idx].done = !state.weekly[idx].done;
+  saveState();
+  renderWeekly();
+}
+
+function resetWeeklyChecks() {
+  state.weekly.forEach(w => w.done = false);
+  saveState();
+  renderWeekly();
+  showToast('今週のチェックリストをリセットしました');
+}
+
+function renderBookmarks() {
+  const list = document.getElementById('bookmark-list');
+  list.innerHTML = state.bookmarks.map((bm, idx) => `
+    <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50">
+      <a href="${bm.url}" target="_blank" rel="noopener" class="text-xs font-bold text-blue-700 hover:underline truncate flex-1">
+        ${bm.title} ↗
+      </a>
+      <button onclick="removeBookmark(${idx})" class="text-[11px] text-slate-400 hover:text-red-600 px-1.5">✕</button>
+    </div>
+  `).join('');
+}
+
+function addBookmark() {
+  const title = document.getElementById('bm-title').value.trim();
+  const url = document.getElementById('bm-url').value.trim();
+  if (!title || !url) return showToast('表示名とURLの両方を入力してください');
+  state.bookmarks.push({ title, url });
+  document.getElementById('bm-title').value = '';
+  document.getElementById('bm-url').value = '';
+  saveState();
+  renderBookmarks();
+  showToast('クイックランチャーに登録しました');
+}
+
+function removeBookmark(idx) {
+  state.bookmarks.splice(idx, 1);
+  saveState();
+  renderBookmarks();
+}
+
+// ==================== 共通ユーティリティ ====================
+function updateHealthScore() {
+  const diagClean = state.diag.filter(i => !i.checked).length; // 最大5
+  const weeklyDone = state.weekly.filter(w => w.done).length;  // 最大4
+  const folderReady = state.folders.length >= 4 ? 1 : 0;       // 最大1
+  const score = Math.round(((diagClean + weeklyDone + folderReady) / 10) * 100);
+  document.getElementById('health-score').textContent = score;
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('クリップボードにコピーしました！');
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('コピーしました！');
+  });
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.remove('opacity-0');
+  setTimeout(() => toast.classList.add('opacity-0'), 2200);
+}
+
+// 初期化
+renderDiag();
+renderFolders();
+updateGeneratedName();
+renderSearchCommands();
+renderGasCode();
+renderWeekly();
+renderBookmarks();
+updateHealthScore();
+</script>
+</body>
+</html>
